@@ -4,7 +4,6 @@
 #include "pico/stdlib.h" 
 #include "hardware/uart.h"
 #include "hardware/gpio.h"
-#include "hardware/spi.h"
 #include "hardware/i2c.h"
 #include "hardware/pio.h"
 #include "hardware/adc.h"
@@ -22,12 +21,6 @@
 #define UART_RX_PIN 5
 
 #define GPIO 2 // Pin donde está conectado el DS18B20
-
-#define SPI_PORT spi0
-#define PIN_MISO 16
-#define PIN_CS   17
-#define PIN_SCK  18
-#define PIN_MOSI 19
 
 #define I2C_PORT i2c0
 #define I2C_SDA 8
@@ -91,37 +84,52 @@ float SensorTemperatura() {
 }
 // ----------------------------
 
+// ---------------------------- Lectura de humedad con ADC
+float SensorHumedad() {
+    // Leer valor analógico del canal 0 (GPIO 26)
+    adc_select_input(0);
+    uint16_t raw = adc_read();
+
+    // Convertir a porcentaje (0–100%)
+    float humedad = (raw / 4095.0f) * 100.0f;
+
+    return humedad;
+}
+// ----------------------------
+
+
+
 // ---------------------------- Función principal
 int main() {
     stdio_init_all();
 
     // UART: inicializa el puerto UART1 para comunicación serie (ej. con PC o Bluetooth)
+    // Ejemplo: Enviar datos de temperatura por USB a una terminal en tu computadora.
     uart_init(UART_ID, BAUD_RATE);
     gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
     gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
+    
 
     // GPIO: configura el pin 2 como entrada con resistencia pull-up (ej. para botones o sensores digitales)
     gpio_init(GPIO);
     gpio_set_dir(GPIO, GPIO_IN);
     gpio_pull_up(GPIO);
 
-    // SPI: inicializa el bus SPI0 a 1 MHz y asigna funciones a los pines (ej. para sensores o pantallas SPI)
-    spi_init(SPI_PORT, 1000*1000);
-    gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
-    gpio_set_function(PIN_CS,   GPIO_FUNC_SIO);
-    gpio_set_function(PIN_SCK,  GPIO_FUNC_SPI);
-    gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
-    gpio_set_dir(PIN_CS, GPIO_OUT);
-    gpio_put(PIN_CS, 1);
-
     // I2C: configura el bus I2C0 a 400 kHz y activa resistencias pull-up en SDA y SCL
+    //¿Para qué sirve? Comunicación con múltiples dispositivos usando solo 2 cables (SDA y SCL).   Ejemplo: Sensor de humedad DHT12 o pantalla LCD I2C.
     i2c_init(I2C_PORT, 400*1000);
     gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);
     gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);
     gpio_pull_up(I2C_SDA);
     gpio_pull_up(I2C_SCL);
 
+    // Inicialización del ADC para humedad
+    gpio_init(26);
+    adc_init();
+    
+
     // PIO: carga el programa PIO para parpadeo de LED y lo ejecuta en el pin por defecto o el GPIO 6
+    // ¿Para qué sirve? Crear protocolos personalizados o tareas precisas como parpadeo o 1-Wire.
     PIO pio = pio0;
     uint offset_blink = pio_add_program(pio, &blink_program);
     #ifdef PICO_DEFAULT_LED_PIN
@@ -139,13 +147,24 @@ int main() {
 
     // Bucle principal
     while (true) {
+        // Lectura de temperatura
         float temp = SensorTemperatura();
         if (temp > -100.0f) {
             printf("Lectura OK: %.2f °C\n", temp);
         } else {
             printf("Error de lectura\n");
         }
+
+        // Lectura de humedad 
+        float humedad = SensorHumedad();
+        if (humedad >= 0.0f && humedad <= 100.0f) {
+            printf("Humedad del suelo: %.2f %%\n", humedad);
+        } else {
+            printf("Error de lectura de humedad\n");
+        }
+
         sleep_ms(1000);
     }
+
 }
 // ----------------------------

@@ -40,5 +40,6 @@
     "files.associations": {
         "onewire_library.h": "c",
         "ow_rom.h": "c"
-    }
+    },
+    "C_Cpp.errorSquiggles": "disabled"
 }
