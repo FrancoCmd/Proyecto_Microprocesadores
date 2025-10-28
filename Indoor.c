@@ -25,6 +25,8 @@
 #define I2C_PORT i2c0
 #define I2C_SDA 8
 #define I2C_SCL 9
+#define LDR_PIN 27  // Pin conectado al AO del módulo LDR
+
 // ----------------------------
 
 // Estructura global para manejar el bus 1-Wire
@@ -97,6 +99,17 @@ float SensorHumedad() {
 }
 // ----------------------------
 
+// ---------------------------- Lectura de luz con ADC
+float SensorLuz() {
+    adc_select_input(1);  // Canal 1 corresponde al GPIO 27
+    uint16_t raw = adc_read();
+
+    // Convertir a porcentaje (0–100%)
+    float luz = (raw / 4095.0f) * 100.0f;
+
+    return luz;
+}
+// ----------------------------
 
 
 // ---------------------------- Función principal
@@ -104,11 +117,9 @@ int main() {
     stdio_init_all();
 
     // UART: inicializa el puerto UART1 para comunicación serie (ej. con PC o Bluetooth)
-    // Ejemplo: Enviar datos de temperatura por USB a una terminal en tu computadora.
     uart_init(UART_ID, BAUD_RATE);
     gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
     gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
-    
 
     // GPIO: configura el pin 2 como entrada con resistencia pull-up (ej. para botones o sensores digitales)
     gpio_init(GPIO);
@@ -116,20 +127,18 @@ int main() {
     gpio_pull_up(GPIO);
 
     // I2C: configura el bus I2C0 a 400 kHz y activa resistencias pull-up en SDA y SCL
-    //¿Para qué sirve? Comunicación con múltiples dispositivos usando solo 2 cables (SDA y SCL).   Ejemplo: Sensor de humedad DHT12 o pantalla LCD I2C.
     i2c_init(I2C_PORT, 400*1000);
     gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);
     gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);
     gpio_pull_up(I2C_SDA);
     gpio_pull_up(I2C_SCL);
 
-    // Inicialización del ADC para humedad
-    gpio_init(26);
+    // Inicialización del ADC para humedad y luz
+    gpio_init(26);  // Humedad (canal 0)
+    gpio_init(LDR_PIN);  // Luz (canal 1)
     adc_init();
-    
 
     // PIO: carga el programa PIO para parpadeo de LED y lo ejecuta en el pin por defecto o el GPIO 6
-    // ¿Para qué sirve? Crear protocolos personalizados o tareas precisas como parpadeo o 1-Wire.
     PIO pio = pio0;
     uint offset_blink = pio_add_program(pio, &blink_program);
     #ifdef PICO_DEFAULT_LED_PIN
@@ -139,7 +148,7 @@ int main() {
     #endif
 
     // Inicialización del bus 1-Wire para el DS18B20
-    uint offset_ow = pio_add_program(pio, &onewire_program); // Carga el programa PIO de 1-Wire
+    uint offset_ow = pio_add_program(pio, &onewire_program);
     if (!ow_init(&ow, pio, offset_ow, GPIO)) {
         printf("Error al inicializar el bus 1-Wire\n");
         return 1;
@@ -163,8 +172,15 @@ int main() {
             printf("Error de lectura de humedad\n");
         }
 
+        // Lectura de luz
+        float luz = SensorLuz();
+        if (luz >= 0.0f && luz <= 100.0f) {
+            printf("Intensidad lumínica: %.2f %%\n", luz);
+        } else {
+            printf("Error de lectura de luz\n");
+        }
+
         sleep_ms(1000);
     }
-
 }
 // ----------------------------
